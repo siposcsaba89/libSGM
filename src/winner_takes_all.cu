@@ -230,81 +230,56 @@ namespace {
 
 		if (idx == 0) {
 			float lhv = minCostL2 * uniqueness;
-			int disp = (lhv < minCostL1 && abs(minDispL1 - minDispL2) > 1) ? 0 : minDispL1 + 1; // add "+1" 
+			int disp = (lhv < minCostL1 && abs(minDispL1 - minDispL2) > 1) ? 0 : minDispL1; // add "+1" 
             float sub_pix_disp = disp;
-            if (disp > 1 && disp < DISP_SIZE)
+            if (disp > 1 && disp < DISP_SIZE - 1)
             {
-                if (x == 128 && y == 200)
-                    printf("%d %d %d \n", current_cost[disp - 2], current_cost[disp - 1], current_cost[disp]);
-
-                float leftDif = current_cost[disp - 2] - current_cost[disp - 1];
-                float rightDif = current_cost[disp - 0] - current_cost[disp - 1];
+                float leftDif = current_cost[disp - 1] - minCostL1;
+                float rightDif = current_cost[disp + 1] - minCostL1;
                
                 if (leftDif <= rightDif)
                 {
                     float xx = leftDif / rightDif;
                     //sub_pix_disp = sub_pix_disp - 0.5f + xx / 2.0f - 1.0f; //linear method
                     //sub_pix_disp = sub_pix_disp - 0.5f + xx / (xx + 1.0f) - 1.0f; //parabola
-                    sub_pix_disp = sub_pix_disp - 0.5f + (xx * xx + xx) / (4.0f) - 1.0f; //histogram
+                    sub_pix_disp = sub_pix_disp - 0.5f + (xx * xx + xx) / (4.0f); //histogram
                     //sub_pix_disp = sub_pix_disp - 0.5f + (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
-                    if (x == 128 && y == 200)
-                        printf("javitott bal %f \n", -0.5f + xx / 2.0f);
                 }
                 else
                 {
                     float xx = rightDif / leftDif;
                     //sub_pix_disp = sub_pix_disp + 0.5f - xx / 2.0f - 1.0f;//linear
                     //sub_pix_disp = sub_pix_disp + 0.5f - xx / (xx + 1.0f) - 1.0f; //parabola
-                    sub_pix_disp = sub_pix_disp + 0.5f - (xx * xx + xx) / (4.0f) - 1.0f; //histogram
+                    sub_pix_disp = sub_pix_disp + 0.5f - (xx * xx + xx) / (4.0f); //histogram
                     //sub_pix_disp = sub_pix_disp + 0.5f - (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
-                    if (x == 128 && y == 200)
-                        printf("javitott jobb %f \n", 0.5f - xx / 2.0f);
-
                 }
             }
             leftDisp[y * width + x] = disp;
             left_disp_sub_pix[y * width + x] = sub_pix_disp;
 
-
-
+            //right disparity
 			float rhv = minCostR2 * uniqueness;
-			disp = (rhv < minCostR1 && abs(minDispR1 - minDispR2) > 1) ? 0 : minDispR1 + 1; // add "+1" 
+			disp = (rhv < minCostR1 && abs(minDispR1 - minDispR2) > 1) ? 0 : minDispR1; // add "+1" 
             sub_pix_disp = disp;
-            //if (x == 128 && y == 200)
-            //    printf("disp %d \n", disp);
-            if (disp > 1 && disp < DISP_SIZE)
+            if (disp > 1 && disp < DISP_SIZE - 1)
             {
-              //  if (x == 128 && y == 200)
-              //      printf("%d %d %d \n", tmp_costs[disp - 2], minCostR1, tmp_costs[disp]);
-
-                float leftDif = tmp_costs[disp - 2] - minCostR1;
-                float rightDif = tmp_costs[disp - 0] - minCostR1;
-                //if (x == 128 && y == 200)
-                //{
-                //    printf("leftDif bal %f \n", leftDif);
-                //    printf("rightDif bal %f \n", rightDif);
-                //}
+                float leftDif = tmp_costs[disp - 1] - minCostR1;
+                float rightDif = tmp_costs[disp + 1] - minCostR1;
                 if (leftDif <= rightDif)
                 {
                     float xx = leftDif / rightDif;
                     //sub_pix_disp = sub_pix_disp - 0.5f + xx / 2.0f - 1.0f; //linear method
                     //sub_pix_disp = sub_pix_disp - 0.5f + xx / (xx + 1.0f) - 1.0f; //parabola
-                    sub_pix_disp = sub_pix_disp - 0.5f + (xx * xx + xx) / (4.0f) - 1.0f; //histogram
+                    sub_pix_disp = sub_pix_disp - 0.5f + (xx * xx + xx) / (4.0f); //histogram
                     //sub_pix_disp = sub_pix_disp - 0.5f + (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
-                    //if (x == 128 && y == 200)
-                    //    printf("javitott bal %f \n",xx);
-
                 }
                 else
                 {
                     float xx = rightDif / leftDif;
                     //sub_pix_disp = sub_pix_disp + 0.5f - xx / 2.0f - 1.0f;//linear
                     //sub_pix_disp = sub_pix_disp + 0.5f - xx / (xx + 1.0f) - 1.0f; //parabola
-                    sub_pix_disp = sub_pix_disp + 0.5f - (xx * xx + xx) / (4.0f) - 1.0f; //histogram
+                    sub_pix_disp = sub_pix_disp + 0.5f - (xx * xx + xx) / (4.0f); //histogram
                     //sub_pix_disp = sub_pix_disp + 0.5f - (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
-                    //if (x == 128 && y == 200)
-                    //    printf("javitott jobb %f \n", xx);
-
                 }
             }
 

@@ -272,7 +272,7 @@ namespace sgm {
         cv::imshow("left pix disp", left_disp_color);
 #define CALCULATE_DISP_ERROR
 #ifdef CALCULATE_DISP_ERROR
-        cv::Mat gt = cv::imread("e:/Downloads/teddy/disp6.png", -1);
+        cv::Mat gt = cv::imread("e:/Downloads/teddy/disp2.png", -1);
 
         cv::Mat gt_float(gt.rows, gt.cols, CV_32FC1);
 
@@ -290,8 +290,8 @@ namespace sgm {
             for (int i = 0; i < width_; ++i)
             {
                 float gt = gt_float.at<float>(j, i);
-                float sbp = right_disp_subpx.at<float>(j, i);
-                //float sbp = left_disp_subpx.at<float>(j, i);
+                //float sbp = right_disp_subpx.at<float>(j, i);
+                float sbp = left_disp_subpx.at<float>(j, i);
                 //float sbp = left_disp.at<uint16_t>(j, i);
                 if (abs(gt - sbp) > 0.25f)
                     ++err_pix;

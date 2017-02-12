@@ -16,7 +16,10 @@ limitations under the License.
 
 #include "renderer.h"
 
-Renderer::Renderer(int width, int height) : width_(width), height_(height) {
+Renderer::Renderer(int width, int height) : width_(width), height_(height) 
+{
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	// init texture
@@ -50,15 +53,17 @@ Renderer::Renderer(int width, int height) : width_(width), height_(height) {
 		"uv_coord = tex_coord\n;"
 		"}\n";
 
-	static const char* input_frag_src =
-		"#version 330 core\n"
-		"precision highp float;\n"
-		"out mediump vec4 fragColor;\n"
-		"in vec2 uv_coord;\n"
-		"uniform highp usampler2D tex_sampler;\n"
-		"void main() {\n"
-		"	float x = float(texture(tex_sampler, uv_coord).r) / 65535.0;\n"
-		"	vec4 color = vec4(x, x, x, 1.0);\n"
+    static const char* input_frag_src =
+        "#version 330 core\n"
+        "precision highp float;\n"
+        "out mediump vec4 fragColor;\n"
+        "in vec2 uv_coord;\n"
+        "uniform highp sampler2D tex_sampler;\n"
+        "void main() {\n"
+        "	//float x = float(texture(tex_sampler, uv_coord).r) / 65535.0;\n"
+        "	vec4 x = texture(tex_sampler, uv_coord);\n"
+        "	//vec4 color = vec4(x, x, x, 1.0);\n"
+        "	vec4 color = x;\n"
 		"	fragColor = color;\n"
 		"}\n";
 	program_input_ = compile_shader_program(vert_src, input_frag_src);
@@ -114,10 +119,10 @@ Renderer::~Renderer() {
 	glDeleteBuffers(1, &vert_buffer_);
 }
 
-void Renderer::render_input(const uint16_t* h_input_ptr) {
+void Renderer::render_input(const uint8_t* h_input_ptr) {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture_);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_R16UI, width_, height_, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, h_input_ptr);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width_, height_, 0, GL_BGR, GL_UNSIGNED_BYTE, h_input_ptr);
 
 	glUseProgram(program_input_);
 
