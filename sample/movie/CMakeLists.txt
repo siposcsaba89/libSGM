@@ -16,22 +16,22 @@ else()
 endif()
 
 find_package(OpenGL REQUIRED)
-
-find_package(GLEW REQUIRED)
-
 find_package(GLFW REQUIRED)
+find_package(glew REQUIRED CONFIG)
+
 
 include_directories(../../include)
 include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(${OpenCV_INCLUDE_DIRS})
-include_directories(${GLEW_INCLUDE_DIRS})
 include_directories(${GLFW_INCLUDE_DIRS})
 
 CUDA_ADD_EXECUTABLE(stereo_movie
 stereosgm_movie.cpp
 demo.cpp
+demo.h
 renderer.cpp
+renderer.h
 cuda_gl.cu
 )
 
-TARGET_LINK_LIBRARIES(stereo_movie sgm  ${CUDA_LIBRARIES} ${CUDA_nppi_LIBRARY} ${OpenCV_LIBS} ${GLEW_LIBRARIES} ${GLFW_LIBRARY} ${OPENGL_LIBRARY})
+TARGET_LINK_LIBRARIES(stereo_movie sgm  ${CUDA_LIBRARIES} ${CUDA_nppi_LIBRARY} ${OpenCV_LIBS} ::glew ${GLFW_LIBRARY} ${OPENGL_LIBRARY})

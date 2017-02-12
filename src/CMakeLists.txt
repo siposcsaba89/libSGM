@@ -1,3 +1,4 @@
+find_package(OpenCV REQUIRED)
 find_package(CUDA REQUIRED)
 
 include_directories(../include)
@@ -15,3 +16,5 @@ SET(STEREOSRCS
 )
 
 CUDA_ADD_LIBRARY(sgm stereo_sgm.cpp ${STEREOSRCS} STATIC)
+target_link_libraries(sgm PRIVATE ${OpenCV_LIBRARUES})
+target_include_directories(sgm PRIVATE ${OpenCV_INCLUDE_DIRS})

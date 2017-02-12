@@ -39,11 +39,15 @@ namespace sgm {
 
 		void scan_scost(const uint8_t* d_matching_cost, uint16_t* d_scost, int width, int height, int disp_size, cudaStream_t cuda_streams[]);
 
-		void winner_takes_all(const uint16_t* d_scost, uint16_t* d_left_disp, uint16_t* d_right_disp, int width, int height, int disp_size);
+		void winner_takes_all(const uint16_t* d_scost, 
+            uint16_t* d_left_disp, uint16_t* d_right_disp,
+            float * d_left_disp_sub_pix, float * d_right_disp_sub_pix,
+            int width, int height, int disp_size);
 		
 		void median_filter(const uint16_t* d_src, uint16_t* d_dst, void* median_filter_buffer, int width, int height);
 
-		void check_consistency(uint16_t* d_left_disp, const uint16_t* d_right_disp, const void* d_src_left, int width, int height, int depth_bits);
+        void check_consistency(uint16_t* d_left_disp, const uint16_t* d_right_disp, const void* d_src_left, int width, int height, int depth_bits);
+        void check_consistency(float* d_left_disp, const float* d_right_disp, const void* d_src_left, int width, int height, int depth_bits);
 
 		void cast_16bit_8bit_array(const uint16_t* arr16bits, uint8_t* arr8bits, int num_elements);
 

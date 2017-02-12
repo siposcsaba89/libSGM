@@ -16,7 +16,7 @@ limitations under the License.
 
 #include "internal.h"
 
-#define PENALTY1 20
+#define PENALTY1 30
 #define PENALTY2 100
 
 #define USE_ATOMIC

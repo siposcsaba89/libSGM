@@ -33,6 +33,22 @@ namespace {
 			d_leftDisp[i * width + j] = 0;
 		}
 	}
+
+    __global__ void check_consistency_kernel_float(float* d_leftDisp, const float* d_rightDisp, const uint8_t* d_left, int width, int height) {
+
+        const int j = blockIdx.x * blockDim.x + threadIdx.x;
+        const int i = blockIdx.y * blockDim.y + threadIdx.y;
+
+        // left-right consistency check, only on leftDisp, but could be done for rightDisp too
+
+        uint8_t mask = d_left[i * width + j];
+        float d = d_leftDisp[i * width + j];
+        int k = j - int(d + 0.5f);
+        if (mask == 0 || (d + 0.5f) <= 0 || (k >= 0 && k < width && abs(d_rightDisp[i * width + k] - d) > 1.0f)) {
+            // masked or left-right inconsistent pixel -> invalid
+            d_leftDisp[i * width + j] = 0.0f;
+        }
+    }
 }
 
 namespace sgm {
@@ -51,6 +67,15 @@ namespace sgm {
 			
 			CudaKernelCheck();	
 		}
+
+        void check_consistency(float * d_left_disp, const float * d_right_disp, const void * d_src_left, int width, int height, int depth_bits)
+        {
+            const dim3 blocks(width / 16, height / 16);
+            const dim3 threads(16, 16);
+            check_consistency_kernel_float << < blocks, threads >> > (d_left_disp, d_right_disp, (uint8_t*)d_src_left, width, height);
+
+            CudaKernelCheck();
+        }
 
 	}
 }

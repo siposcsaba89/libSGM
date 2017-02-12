@@ -29,7 +29,8 @@ namespace {
 		return __shfl(val, 0);
 	}
 
-	__global__ void winner_takes_all_kernel64(uint16_t* leftDisp, uint16_t* rightDisp, const uint16_t* __restrict__ d_cost, int width, int height)
+	__global__ void winner_takes_all_kernel64(uint16_t* leftDisp, uint16_t* rightDisp, const uint16_t* __restrict__ d_cost, 
+        int width, int height)
 	{
 		const float uniqueness = 0.95f;
 		const int DISP_SIZE = 64;
@@ -116,7 +117,10 @@ namespace {
 		}
 	}
 
-	__global__ void winner_takes_all_kernel128(uint16_t* leftDisp, uint16_t* rightDisp, const uint16_t* __restrict__ d_cost, int width, int height)
+	__global__ void winner_takes_all_kernel128(uint16_t* leftDisp, uint16_t* rightDisp, const uint16_t* __restrict__ d_cost, 
+        float * left_disp_sub_pix,
+        float * right_disp_sub_pix,
+        int width, int height)
 	{
 		const int DISP_SIZE = 128;
 		const float uniqueness = 0.95f;
@@ -226,9 +230,86 @@ namespace {
 
 		if (idx == 0) {
 			float lhv = minCostL2 * uniqueness;
-			leftDisp[y * width + x] = (lhv < minCostL1 && abs(minDispL1 - minDispL2) > 1) ? 0 : minDispL1 + 1; // add "+1" 
+			int disp = (lhv < minCostL1 && abs(minDispL1 - minDispL2) > 1) ? 0 : minDispL1 + 1; // add "+1" 
+            float sub_pix_disp = disp;
+            if (disp > 1 && disp < DISP_SIZE)
+            {
+                if (x == 128 && y == 200)
+                    printf("%d %d %d \n", current_cost[disp - 2], current_cost[disp - 1], current_cost[disp]);
+
+                float leftDif = current_cost[disp - 2] - current_cost[disp - 1];
+                float rightDif = current_cost[disp - 0] - current_cost[disp - 1];
+               
+                if (leftDif <= rightDif)
+                {
+                    float xx = leftDif / rightDif;
+                    //sub_pix_disp = sub_pix_disp - 0.5f + xx / 2.0f - 1.0f; //linear method
+                    //sub_pix_disp = sub_pix_disp - 0.5f + xx / (xx + 1.0f) - 1.0f; //parabola
+                    sub_pix_disp = sub_pix_disp - 0.5f + (xx * xx + xx) / (4.0f) - 1.0f; //histogram
+                    //sub_pix_disp = sub_pix_disp - 0.5f + (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
+                    if (x == 128 && y == 200)
+                        printf("javitott bal %f \n", -0.5f + xx / 2.0f);
+                }
+                else
+                {
+                    float xx = rightDif / leftDif;
+                    //sub_pix_disp = sub_pix_disp + 0.5f - xx / 2.0f - 1.0f;//linear
+                    //sub_pix_disp = sub_pix_disp + 0.5f - xx / (xx + 1.0f) - 1.0f; //parabola
+                    sub_pix_disp = sub_pix_disp + 0.5f - (xx * xx + xx) / (4.0f) - 1.0f; //histogram
+                    //sub_pix_disp = sub_pix_disp + 0.5f - (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
+                    if (x == 128 && y == 200)
+                        printf("javitott jobb %f \n", 0.5f - xx / 2.0f);
+
+                }
+            }
+            leftDisp[y * width + x] = disp;
+            left_disp_sub_pix[y * width + x] = sub_pix_disp;
+
+
+
 			float rhv = minCostR2 * uniqueness;
-			rightDisp[y * width + x] = (rhv < minCostR1 && abs(minDispR1 - minDispR2) > 1) ? 0 : minDispR1 + 1; // add "+1" 
+			disp = (rhv < minCostR1 && abs(minDispR1 - minDispR2) > 1) ? 0 : minDispR1 + 1; // add "+1" 
+            sub_pix_disp = disp;
+            //if (x == 128 && y == 200)
+            //    printf("disp %d \n", disp);
+            if (disp > 1 && disp < DISP_SIZE)
+            {
+              //  if (x == 128 && y == 200)
+              //      printf("%d %d %d \n", tmp_costs[disp - 2], minCostR1, tmp_costs[disp]);
+
+                float leftDif = tmp_costs[disp - 2] - minCostR1;
+                float rightDif = tmp_costs[disp - 0] - minCostR1;
+                //if (x == 128 && y == 200)
+                //{
+                //    printf("leftDif bal %f \n", leftDif);
+                //    printf("rightDif bal %f \n", rightDif);
+                //}
+                if (leftDif <= rightDif)
+                {
+                    float xx = leftDif / rightDif;
+                    //sub_pix_disp = sub_pix_disp - 0.5f + xx / 2.0f - 1.0f; //linear method
+                    //sub_pix_disp = sub_pix_disp - 0.5f + xx / (xx + 1.0f) - 1.0f; //parabola
+                    sub_pix_disp = sub_pix_disp - 0.5f + (xx * xx + xx) / (4.0f) - 1.0f; //histogram
+                    //sub_pix_disp = sub_pix_disp - 0.5f + (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
+                    //if (x == 128 && y == 200)
+                    //    printf("javitott bal %f \n",xx);
+
+                }
+                else
+                {
+                    float xx = rightDif / leftDif;
+                    //sub_pix_disp = sub_pix_disp + 0.5f - xx / 2.0f - 1.0f;//linear
+                    //sub_pix_disp = sub_pix_disp + 0.5f - xx / (xx + 1.0f) - 1.0f; //parabola
+                    sub_pix_disp = sub_pix_disp + 0.5f - (xx * xx + xx) / (4.0f) - 1.0f; //histogram
+                    //sub_pix_disp = sub_pix_disp + 0.5f - (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
+                    //if (x == 128 && y == 200)
+                    //    printf("javitott jobb %f \n", xx);
+
+                }
+            }
+
+            rightDisp[y * width + x] = disp;
+            right_disp_sub_pix[y * width + x] = sub_pix_disp;
 		}
 	}
 
@@ -239,7 +320,10 @@ namespace {
 namespace sgm {
 	namespace details {
 
-		void winner_takes_all(const uint16_t* d_scost, uint16_t* d_left_disp, uint16_t* d_right_disp, int width, int height, int disp_size) {
+		void winner_takes_all(const uint16_t* d_scost, 
+            uint16_t* d_left_disp, uint16_t* d_right_disp,
+            float * d_left_disp_sub_pix, float* d_right_disp_sub_pix,
+            int width, int height, int disp_size) {
 			if (disp_size == 64) {
 				dim3 blocks(width / WTA_PIXEL_IN_BLOCK, height);
 				dim3 threads(32, WTA_PIXEL_IN_BLOCK);
@@ -248,7 +332,9 @@ namespace sgm {
 			else if (disp_size == 128) {
 				dim3 blocks(width / WTA_PIXEL_IN_BLOCK, height);
 				dim3 threads(32, WTA_PIXEL_IN_BLOCK);
-				winner_takes_all_kernel128 << < blocks, threads >> > (d_left_disp, d_right_disp, d_scost, width, height);
+				winner_takes_all_kernel128 << < blocks, threads >> > (d_left_disp, d_right_disp, d_scost, 
+                    d_left_disp_sub_pix, d_right_disp_sub_pix,
+                    width, height);
 			}
 		}
 

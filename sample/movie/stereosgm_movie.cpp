@@ -26,33 +26,49 @@ limitations under the License.
 #include "demo.h"
 #include "renderer.h"
 
+//e:\Downloads\venus\im2.ppm e:\Downloads\venus\im6.ppm
+//e:\Downloads\barn1\im2.ppm e:\Downloads\barn1\im6.ppm
+//e:\Downloads\sawtooth\im2.ppm e:\Downloads\sawtooth\im6.ppm
+//e:\Downloads\cones\im2.png e:\Downloads\cones\im6.png
+//e:\Downloads\teddy\im2.png e:\Downloads\teddy\im6.png
+//e:\Downloads\data_scene_flow\image_2\000000_10.png e:\Downloads\data_scene_flow\image_3\000000_10.png
 int main(int argc, char* argv[]) {
 
 	if (argc < 3) {
-		std::cerr << "usage: stereosgm left_img_fmt right_img_fmt [disp_size] [max_frame_num]" << std::endl;
+		std::cerr << "usage: stereosgm left_img_fmt right_img_fmt" << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 	std::string left_filename_fmt, right_filename_fmt;
 	left_filename_fmt = argv[1];
 	right_filename_fmt = argv[2];
 
+    cv::VideoCapture cap0(left_filename_fmt);
+    cv::VideoCapture cap1(right_filename_fmt);
+
 	// dangerous
-	char buf[1024];
-	sprintf(buf, left_filename_fmt.c_str(), 0);
-	cv::Mat left = cv::imread(buf, -1);
-	sprintf(buf, right_filename_fmt.c_str(), 0);
-	cv::Mat right = cv::imread(buf, -1);
+    cv::Mat leftc, rightc;
+    cv::Mat left;
+    cv::Mat right;
 
+    cap0 >> leftc;
+    cap1 >> rightc;
 
-	int disp_size = 64;
-	if (argc >= 4) {
-		disp_size = atoi(argv[3]);
-	}
+    //if (leftc.cols % 2 != 0)
+    //{
+    //    leftc = leftc(cv::Rect(0, 0, leftc.cols - 1, leftc.rows));
+    //    rightc = rightc(cv::Rect(0, 0, rightc.cols - 1, rightc.rows));
+    //}
 
-	int max_frame = 100;
-	if(argc >= 5) {
-		max_frame = atoi(argv[4]);
-	}
+    //if (leftc.rows % 2 != 0)
+    //{
+    //    leftc = leftc(cv::Rect(0, 0, leftc.cols, leftc.rows - 1));
+    //    rightc = rightc(cv::Rect(0, 0, rightc.cols, rightc.rows - 1));
+    //}
+
+    cv::cvtColor(leftc, left, CV_BGR2GRAY);
+    cv::cvtColor(rightc, right, CV_BGR2GRAY);
+
+	int disp_size = 128;
 
 
 	if (left.size() != right.size() || left.type() != right.type()) {
@@ -73,7 +89,7 @@ int main(int argc, char* argv[]) {
 	int width = left.cols;
 	int height = left.rows;
 
-	cudaGLSetGLDevice(0);
+	//cudaGLSetGLDevice(0);
 
 	SGMDemo demo(width, height);
 
@@ -89,41 +105,38 @@ int main(int argc, char* argv[]) {
 	uint16_t* d_output_buffer = NULL;
 
 	int frame_no = 0;
-	while (!demo.should_close()) {
+	while (!demo.should_close() && true) {
 
-		glClearColor(0.0, 0.0, 0.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		
-		if (frame_no == max_frame) { frame_no = 0; }
-
-		sprintf(buf, left_filename_fmt.c_str(), frame_no);
-		cv::Mat left = cv::imread(buf, -1);
-		sprintf(buf, right_filename_fmt.c_str(), frame_no);
-		cv::Mat right = cv::imread(buf, -1);
-
-		if (left.size() == cv::Size(0, 0) || right.size() == cv::Size(0, 0)) {
-			max_frame = frame_no;
-			frame_no = 0;
-			continue;
-		}
+        cv::cvtColor(leftc, left, CV_BGR2GRAY);
+        cv::cvtColor(rightc, right, CV_BGR2GRAY);
 
 		ssgm.execute(left.data, right.data, (void**)&d_output_buffer); // , sgm::DST_TYPE_CUDA_PTR, 16);
+      
+       
+        renderer.render_input((uint8_t*)leftc.data);
+        //renderer.render_disparity(nullptr, 128);
+        demo.swap_buffer();
+        //cv::imshow("left color image", leftc);
+        //cv::imshow("left gray image", left);
+        int key = cv::waitKey(0);
+        if (key == 27)
+          break;
+        frame_no++;
+        //if (!(cap0.read(leftc) && cap1.read(rightc)))
+            //break;
 
-		switch (demo.get_flag()) {
-		case 0:
-			{
-				renderer.render_input((uint16_t*)left.data);
-			}
-			break;
-		case 1:
-			renderer.render_disparity(d_output_buffer, disp_size);
-			break;
-		case 2:
-			renderer.render_disparity_color(d_output_buffer, disp_size);
-			break;
-		}
-		
-		demo.swap_buffer();
-		frame_no++;
+        //if (leftc.cols % 2 != 0)
+        //{
+        //    leftc = leftc(cv::Rect(0, 0, leftc.cols - 1, leftc.rows));
+        //    rightc = rightc(cv::Rect(0, 0, rightc.cols - 1, rightc.rows));
+        //}
+
+        //if (leftc.rows % 2 != 0)
+        //{
+        //    leftc = leftc(cv::Rect(0, 0, leftc.cols, leftc.rows - 1));
+        //    rightc = rightc(cv::Rect(0, 0, rightc.cols, rightc.rows - 1));
+        //}
+
+
 	}
 }
