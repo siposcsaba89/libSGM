@@ -37,8 +37,8 @@ namespace sgm {
 		void* d_matching_cost;
 		void* d_left_disp;
 		void* d_right_disp;
-        void* d_left_disp_sub_pix;
-        void* d_right_disp_sub_pix;
+        //void* d_left_disp_sub_pix;
+        //void* d_right_disp_sub_pix;
 
 		void* d_tmp_left_disp;
 		void* d_tmp_right_disp;
@@ -70,14 +70,14 @@ namespace sgm {
 
 			CudaSafeCall(cudaMalloc(&this->d_scost, sizeof(uint16_t) * width_ * height_ * disparity_size_));
 
-			CudaSafeCall(cudaMalloc(&this->d_left_disp, sizeof(uint16_t) * width_ * height_));
-			CudaSafeCall(cudaMalloc(&this->d_right_disp, sizeof(uint16_t) * width_ * height_));
-            CudaSafeCall(cudaMalloc(&this->d_left_disp_sub_pix, sizeof(float) * width_ * height_));
-            CudaSafeCall(cudaMalloc(&this->d_right_disp_sub_pix, sizeof(float) * width_ * height_));
+			CudaSafeCall(cudaMalloc(&this->d_left_disp, sizeof(float) * width_ * height_));
+			CudaSafeCall(cudaMalloc(&this->d_right_disp, sizeof(float) * width_ * height_));
+            //CudaSafeCall(cudaMalloc(&this->d_left_disp_sub_pix, sizeof(float) * width_ * height_));
+            //CudaSafeCall(cudaMalloc(&this->d_right_disp_sub_pix, sizeof(float) * width_ * height_));
 
 
-			CudaSafeCall(cudaMalloc(&this->d_tmp_left_disp, sizeof(uint16_t) * width_ * height_));
-			CudaSafeCall(cudaMalloc(&this->d_tmp_right_disp, sizeof(uint16_t) * width_ * height_));
+			CudaSafeCall(cudaMalloc(&this->d_tmp_left_disp, sizeof(float) * width_ * height_));
+			CudaSafeCall(cudaMalloc(&this->d_tmp_right_disp, sizeof(float) * width_ * height_));
 
 			for (int i = 0; i < 8; i++) {
 				CudaSafeCall(cudaStreamCreate(&this->cuda_streams[i]));
@@ -86,7 +86,7 @@ namespace sgm {
 			NppiSize roi = { width_, height_ };
 			NppiSize mask = { 3, 3 }; // width, height
 			NppStatus status;
-			status = nppiFilterMedianGetBufferSize_16u_C1R(roi, mask, &this->median_buffer_size);
+			status = nppiFilterMedianGetBufferSize_32f_C1R(roi, mask, &this->median_buffer_size);
 			if (status != 0) {
 				throw std::runtime_error("nppi error");
 			}
@@ -157,52 +157,7 @@ namespace sgm {
 		if (cu_res_) { delete cu_res_; }
 	}
 
-    template<typename T>
-    void writeFalseColors(const cv::Mat & disp, cv::Mat & dispColor, float max_val,
-        int32_t width_, int32_t height_) {
-
-        // color map
-        float map[8][4] = { { 0,0,0,114 },{ 0,0,1,185 },{ 1,0,0,114 },{ 1,0,1,174 },
-        { 0,1,0,114 },{ 0,1,1,185 },{ 1,1,0,114 },{ 1,1,1,0 } };
-        float sum = 0;
-        for (int32_t i = 0; i<8; i++)
-            sum += map[i][3];
-
-        float weights[8]; // relative weights
-        float cumsum[8];  // cumulative weights
-        cumsum[0] = 0;
-        for (int32_t i = 0; i<7; i++) {
-            weights[i] = sum / map[i][3];
-            cumsum[i + 1] = cumsum[i] + map[i][3] / sum;
-        }
-
-        // for all pixels do
-        for (int32_t v = 0; v<height_; v++) {
-            for (int32_t u = 0; u<width_; u++) {
-
-                // get normalized value
-                float val = std::min(std::max(disp.at<T>(v, u) / max_val, 0.0f), 1.0f);
-
-                // find bin
-                int32_t i;
-                for (i = 0; i<7; i++)
-                    if (val<cumsum[i + 1])
-                        break;
-
-                // compute red/green/blue values
-                float   w = 1.0 - (val - cumsum[i])*weights[i];
-                uint8_t r = (uint8_t)((w*map[i][0] + (1.0 - w)*map[i + 1][0]) * 255.0);
-                uint8_t g = (uint8_t)((w*map[i][1] + (1.0 - w)*map[i + 1][1]) * 255.0);
-                uint8_t b = (uint8_t)((w*map[i][2] + (1.0 - w)*map[i + 1][2]) * 255.0);
-
-                // set pixel
-                dispColor.at<cv::Vec3b>(v, u) = cv::Vec3b(b, g, r);
-            }
-        }
-
-    }
-
-	
+    
     void StereoSGM::execute(const void* left_pixels, const void* right_pixels, void** dst) {
 
         const void *d_input_left, *d_input_right;
@@ -235,42 +190,43 @@ namespace sgm {
         cudaStreamSynchronize(cu_res_->cuda_streams[3]);
 
         sgm::details::winner_takes_all((const uint16_t*)cu_res_->d_scost,
-            (uint16_t*)cu_res_->d_left_disp, (uint16_t*)cu_res_->d_right_disp,
-            (float*)cu_res_->d_left_disp_sub_pix, (float*)cu_res_->d_right_disp_sub_pix,
+            (float*)cu_res_->d_left_disp, (float*)cu_res_->d_right_disp,
             width_, height_, disparity_size_);
 
-        static cv::Mat left_disp_subpx(height_, width_, CV_32FC1),
-            right_disp_subpx(height_, width_, CV_32FC1);
 
-        cudaMemcpy(left_disp_subpx.data, cu_res_->d_left_disp_sub_pix, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
-        cudaMemcpy(right_disp_subpx.data, cu_res_->d_right_disp_sub_pix, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
+        //cudaMemcpy(left_disp_subpx.data, cu_res_->d_left_disp, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
+        //cudaMemcpy(right_disp_subpx.data, cu_res_->d_right_disp, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
 
-        cv::medianBlur(left_disp_subpx, left_disp_subpx, 3);
-        cv::medianBlur(right_disp_subpx, right_disp_subpx, 3);
+        //cv::medianBlur(left_disp_subpx, left_disp_subpx, 3);
+        //cv::medianBlur(right_disp_subpx, right_disp_subpx, 3);
 
-        cudaMemcpy(cu_res_->d_left_disp_sub_pix, left_disp_subpx.data, sizeof(float) * width_ * height_, cudaMemcpyHostToDevice);
-        cudaMemcpy(cu_res_->d_right_disp_sub_pix, right_disp_subpx.data, sizeof(float) * width_ * height_, cudaMemcpyHostToDevice);
+        //cudaMemcpy(cu_res_->d_left_disp_sub_pix, left_disp_subpx.data, sizeof(float) * width_ * height_, cudaMemcpyHostToDevice);
+        //cudaMemcpy(cu_res_->d_right_disp_sub_pix, right_disp_subpx.data, sizeof(float) * width_ * height_, cudaMemcpyHostToDevice);
 
-        sgm::details::median_filter((uint16_t*)cu_res_->d_left_disp, (uint16_t*)cu_res_->d_tmp_left_disp, cu_res_->d_median_filter_buffer, width_, height_);
-        sgm::details::median_filter((uint16_t*)cu_res_->d_right_disp, (uint16_t*)cu_res_->d_tmp_right_disp, cu_res_->d_median_filter_buffer, width_, height_);
+        sgm::details::median_filter((float*)cu_res_->d_left_disp, (float*)cu_res_->d_tmp_left_disp, cu_res_->d_median_filter_buffer, width_, height_);
+        sgm::details::median_filter((float*)cu_res_->d_right_disp, (float*)cu_res_->d_tmp_right_disp, cu_res_->d_median_filter_buffer, width_, height_);
 
-        sgm::details::check_consistency((uint16_t*)cu_res_->d_tmp_left_disp, (uint16_t*)cu_res_->d_tmp_right_disp, d_input_left, width_, height_, input_depth_bits_);
-        sgm::details::check_consistency((float*)cu_res_->d_left_disp_sub_pix, (float*)cu_res_->d_right_disp_sub_pix, d_input_left, width_, height_, input_depth_bits_);
-        cudaMemcpy(left_disp_subpx.data, cu_res_->d_left_disp_sub_pix, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
-        cudaMemcpy(right_disp_subpx.data, cu_res_->d_right_disp_sub_pix, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
+        //sgm::details::check_consistency((uint16_t*)cu_res_->d_tmp_left_disp, (uint16_t*)cu_res_->d_tmp_right_disp, d_input_left, width_, height_, input_depth_bits_);
+        sgm::details::check_consistency((float*)cu_res_->d_tmp_left_disp, (float*)cu_res_->d_tmp_right_disp, d_input_left, width_, height_, input_depth_bits_);
 
-        cudaMemcpy(left_disp_subpx.data, cu_res_->d_left_disp_sub_pix, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
-        cv::Mat left_disp(height_, width_, CV_16UC1);
-        cudaMemcpy(left_disp.data, cu_res_->d_tmp_left_disp, sizeof(uint16_t) * width_ * height_, cudaMemcpyDeviceToHost);
+        //static cv::Mat left_disp_subpx(height_, width_, CV_32FC1),
+        //    right_disp_subpx(height_, width_, CV_32FC1);
+        //cv::Mat left_disp_subpix_color(height_, width_, CV_8UC3);
+        //
+        //cudaMemcpy(left_disp_subpx.data, cu_res_->d_tmp_left_disp, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
+        //cudaMemcpy(right_disp_subpx.data, cu_res_->d_tmp_right_disp, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost);
 
-        cv::Mat left_disp_color(height_, width_, CV_8UC3), left_disp_subpix_color(height_, width_, CV_8UC3);
+        //cv::Mat left_disp(height_, width_, CV_16UC1);
+        //cudaMemcpy(left_disp.data, cu_res_->d_tmp_left_disp, sizeof(uint16_t) * width_ * height_, cudaMemcpyDeviceToHost);
+
+        
         //colorize disparity
-        writeFalseColors<uint16_t>(left_disp, left_disp_color, 128.0f, width_, height_);
-        writeFalseColors<float>(left_disp_subpx, left_disp_subpix_color, 128.0f, width_, height_);
+        //writeFalseColors<uint16_t>(left_disp, left_disp_color, 128.0f, width_, height_);
+        
 
-        cv::imshow("left sub pix disp", left_disp_subpix_color);
-        cv::imshow("left pix disp", left_disp_color);
-#define CALCULATE_DISP_ERROR
+        //cv::imshow("left sub pix disp", left_disp_subpix_color);
+        //cv::imshow("left pix disp", left_disp_color);
+//#define CALCULATE_DISP_ERROR
 #ifdef CALCULATE_DISP_ERROR
         cv::Mat gt = cv::imread("e:/Downloads/teddy/disp2.png", -1);
 
@@ -304,18 +260,11 @@ namespace sgm {
 		// output disparity image
 		void* disparity_image = cu_res_->d_tmp_left_disp;
 
-		if (!is_cuda_output(inout_type_) && output_depth_bits_ == 16) {
-			CudaSafeCall(cudaMemcpy(*dst, disparity_image, sizeof(uint16_t) * width_ * height_, cudaMemcpyDeviceToHost));
+		if (!is_cuda_output(inout_type_) && output_depth_bits_ == 32) {
+			CudaSafeCall(cudaMemcpy(*dst, disparity_image, sizeof(float) * width_ * height_, cudaMemcpyDeviceToHost));
 		}
-		else if (is_cuda_output(inout_type_) && output_depth_bits_ == 16) {
+		else if (is_cuda_output(inout_type_) && output_depth_bits_ == 32) {
 			*dst = disparity_image; // optimize! no-copy!
-		}
-		else if (!is_cuda_output(inout_type_) && output_depth_bits_ == 8) {
-			CudaSafeCall(cudaMemcpy(cu_res_->h_output_16bit_buffer, disparity_image, sizeof(uint16_t) * width_ * height_, cudaMemcpyDeviceToHost));
-			for (int i = 0; i < width_ * height_; i++) { ((uint8_t*)*dst)[i] = (uint8_t)cu_res_->h_output_16bit_buffer[i]; }
-		}
-		else if (is_cuda_output(inout_type_) && output_depth_bits_ == 8) {
-			sgm::details::cast_16bit_8bit_array((const uint16_t*)disparity_image, (uint8_t*)*dst, width_ * height_);
 		}
 		else {
 			std::cerr << "not impl" << std::endl;

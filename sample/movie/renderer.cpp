@@ -35,11 +35,11 @@ Renderer::Renderer(int width, int height) : width_(width), height_(height)
 	glGenTextures(1, &disp_texture_);
 	glBindTexture(GL_TEXTURE_2D, disp_texture_);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_R16, width_, height_, 0, GL_RED, GL_UNSIGNED_SHORT, 0);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	//glTexImage2D(GL_TEXTURE_2D, 0, GL_R16, width_, height_, 0, GL_RED, GL_UNSIGNED_SHORT, 0);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	// init shader program 
@@ -74,7 +74,7 @@ Renderer::Renderer(int width, int height) : width_(width), height_(height)
 		"out mediump vec4 fragColor;\n"
 		"in vec2 uv_coord;\n"
 		"uniform sampler2D tex_sampler;\n"
-		"uniform int inv_disp_size;\n"
+		"uniform float inv_disp_size;\n"
 		"void main() {\n"
 		"	float x = texture(tex_sampler, uv_coord).r * inv_disp_size;\n"
 		"	vec4 color = vec4(x, x, x , 1.0);\n"
@@ -88,11 +88,11 @@ Renderer::Renderer(int width, int height) : width_(width), height_(height)
 		"out mediump vec4 fragColor;\n"
 		"in vec2 uv_coord;\n"
 		"uniform sampler2D tex_sampler;\n"
-		"uniform int inv_disp_size;\n"
+		"uniform float inv_disp_size;\n"
 		"void main() {\n"
-		"	float val = texture(tex_sampler, uv_coord).r * inv_disp_size;\n"
-		"	vec4 color = clamp(vec4(-2.0 + val * 4.0, 2.0 - abs(val-0.5) * 4.0, 2.0 - val * 4.0, 1.0), 0.0, 1.0);\n"
-		"	fragColor = color;\n"
+        "	float val = texture(tex_sampler, uv_coord).r * inv_disp_size;\n"
+        "	vec4 color = clamp(vec4(-2.0 + val * 4.0, 2.0 - abs(val-0.5) * 4.0, 2.0 - val * 4.0, 1.0), 0.0, 1.0);\n"
+        "	fragColor = color;\n"
 		"}\n";
 	program_cdisp_ = compile_shader_program(vert_src, cdisp_frag_src);
 
@@ -143,34 +143,35 @@ void Renderer::render_input(const uint8_t* h_input_ptr) {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void Renderer::render_disparity(const uint16_t* d_disp, int disp_size) {
+void Renderer::render_disparity(const float* d_disp, float disp_size) {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
-	// cuda-gl interop
-	cudaGraphicsResource_t cuda_gl_tex_resource;
-	cudaGraphicsGLRegisterImage(&cuda_gl_tex_resource, disp_texture_, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
-	cudaGraphicsMapResources(1, &cuda_gl_tex_resource);
-	cudaArray_t texture_array;
-	cudaGraphicsSubResourceGetMappedArray(&texture_array, cuda_gl_tex_resource, 0, 0);
-	
-	cudaResourceDesc desc;
-	desc.resType = cudaResourceTypeArray;
-	desc.res.array.array = texture_array;
-
-	cudaSurfaceObject_t write_surface;
-	cudaCreateSurfaceObject(&write_surface, &desc);
-
-	write_surface_U16_with_multiplication(write_surface, d_disp, width_, height_, 256);
-
-	cudaDestroySurfaceObject(write_surface);
-
-	cudaGraphicsUnmapResources(1, &cuda_gl_tex_resource);
-	cudaGraphicsUnregisterResource(cuda_gl_tex_resource);
+	//// cuda-gl interop
+	//cudaGraphicsResource_t cuda_gl_tex_resource;
+	//cudaGraphicsGLRegisterImage(&cuda_gl_tex_resource, disp_texture_, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
+	//cudaGraphicsMapResources(1, &cuda_gl_tex_resource);
+	//cudaArray_t texture_array;
+	//cudaGraphicsSubResourceGetMappedArray(&texture_array, cuda_gl_tex_resource, 0, 0);
+	//
+	//cudaResourceDesc desc;
+	//desc.resType = cudaResourceTypeArray;
+	//desc.res.array.array = texture_array;
+    //
+	//cudaSurfaceObject_t write_surface;
+	//cudaCreateSurfaceObject(&write_surface, &desc);
+    //
+	//write_surface_U16_with_multiplication(write_surface, d_disp, width_, height_, 256);
+    //
+	//cudaDestroySurfaceObject(write_surface);
+    //
+	//cudaGraphicsUnmapResources(1, &cuda_gl_tex_resource);
+	//cudaGraphicsUnregisterResource(cuda_gl_tex_resource);
 	// end cuda-gl interop
 
 	glUseProgram(program_disp_);
 	glBindTexture(GL_TEXTURE_2D, disp_texture_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width_, height_, 0, GL_RED, GL_FLOAT, d_disp);
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glBindBuffer(GL_ARRAY_BUFFER, vert_buffer_);
@@ -184,7 +185,7 @@ void Renderer::render_disparity(const uint16_t* d_disp, int disp_size) {
 	}
 	loc = glGetUniformLocation(program_cdisp_, "inv_disp_size");
 	if (loc != -1) {
-		glUniform1i(loc, 256 / disp_size);
+		glUniform1f(loc, 1.0f / disp_size);
 	}
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -192,34 +193,36 @@ void Renderer::render_disparity(const uint16_t* d_disp, int disp_size) {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void Renderer::render_disparity_color(const uint16_t* d_disp, int disp_size) {
+void Renderer::render_disparity_color(const float* d_disp, float disp_size) {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	// cuda-gl interop
-	cudaGraphicsResource_t cuda_gl_tex_resource;
-	cudaGraphicsGLRegisterImage(&cuda_gl_tex_resource, disp_texture_, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
-	cudaGraphicsMapResources(1, &cuda_gl_tex_resource);
-	cudaArray_t texture_array;
-	cudaGraphicsSubResourceGetMappedArray(&texture_array, cuda_gl_tex_resource, 0, 0);
-
-	cudaResourceDesc desc;
-	desc.resType = cudaResourceTypeArray;
-	desc.res.array.array = texture_array;
-
-	cudaSurfaceObject_t write_surface;
-	cudaCreateSurfaceObject(&write_surface, &desc);
-
-	write_surface_U16_with_multiplication(write_surface, d_disp, width_, height_, 256);
-
-	cudaDestroySurfaceObject(write_surface);
-
-	cudaGraphicsUnmapResources(1, &cuda_gl_tex_resource);
-	cudaGraphicsUnregisterResource(cuda_gl_tex_resource);
+	//cudaGraphicsResource_t cuda_gl_tex_resource;
+	//cudaGraphicsGLRegisterImage(&cuda_gl_tex_resource, disp_texture_, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
+	//cudaGraphicsMapResources(1, &cuda_gl_tex_resource);
+	//cudaArray_t texture_array;
+	//cudaGraphicsSubResourceGetMappedArray(&texture_array, cuda_gl_tex_resource, 0, 0);
+    //
+	//cudaResourceDesc desc;
+	//desc.resType = cudaResourceTypeArray;
+	//desc.res.array.array = texture_array;
+    //
+	//cudaSurfaceObject_t write_surface;
+	//cudaCreateSurfaceObject(&write_surface, &desc);
+    //
+	//write_surface_U16_with_multiplication(write_surface, d_disp, width_, height_, 256);
+    //
+	//cudaDestroySurfaceObject(write_surface);
+    //
+	//cudaGraphicsUnmapResources(1, &cuda_gl_tex_resource);
+	//cudaGraphicsUnregisterResource(cuda_gl_tex_resource);
 	// end cuda-gl interop
+
 
 	glUseProgram(program_cdisp_);
 	glBindTexture(GL_TEXTURE_2D, disp_texture_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width_, height_, 0, GL_RED, GL_FLOAT, d_disp);
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glBindBuffer(GL_ARRAY_BUFFER, vert_buffer_);
@@ -233,7 +236,7 @@ void Renderer::render_disparity_color(const uint16_t* d_disp, int disp_size) {
 	}
 	loc = glGetUniformLocation(program_cdisp_, "inv_disp_size");
 	if (loc != -1) {
-		glUniform1i(loc, 256 / disp_size);
+		glUniform1f(loc, 1.0f / disp_size);
 	}
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 

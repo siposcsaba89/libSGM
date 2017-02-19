@@ -29,7 +29,8 @@ namespace {
 		return __shfl(val, 0);
 	}
 
-	__global__ void winner_takes_all_kernel64(uint16_t* leftDisp, uint16_t* rightDisp, const uint16_t* __restrict__ d_cost, 
+    //TODO make it subpixel
+	__global__ void winner_takes_all_kernel64(float* leftDisp, float* rightDisp, const uint16_t* __restrict__ d_cost, 
         int width, int height)
 	{
 		const float uniqueness = 0.95f;
@@ -117,9 +118,7 @@ namespace {
 		}
 	}
 
-	__global__ void winner_takes_all_kernel128(uint16_t* leftDisp, uint16_t* rightDisp, const uint16_t* __restrict__ d_cost, 
-        float * left_disp_sub_pix,
-        float * right_disp_sub_pix,
+	__global__ void winner_takes_all_kernel128(float* leftDisp, float* rightDisp, const uint16_t* __restrict__ d_cost, 
         int width, int height)
 	{
 		const int DISP_SIZE = 128;
@@ -254,9 +253,8 @@ namespace {
                     //sub_pix_disp = sub_pix_disp + 0.5f - (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
                 }
             }
-            leftDisp[y * width + x] = disp;
-            left_disp_sub_pix[y * width + x] = sub_pix_disp;
-
+            leftDisp[y * width + x] = sub_pix_disp;
+            
             //right disparity
 			float rhv = minCostR2 * uniqueness;
 			disp = (rhv < minCostR1 && abs(minDispR1 - minDispR2) > 1) ? 0 : minDispR1; // add "+1" 
@@ -283,8 +281,7 @@ namespace {
                 }
             }
 
-            rightDisp[y * width + x] = disp;
-            right_disp_sub_pix[y * width + x] = sub_pix_disp;
+            rightDisp[y * width + x] = sub_pix_disp;
 		}
 	}
 
@@ -296,8 +293,7 @@ namespace sgm {
 	namespace details {
 
 		void winner_takes_all(const uint16_t* d_scost, 
-            uint16_t* d_left_disp, uint16_t* d_right_disp,
-            float * d_left_disp_sub_pix, float* d_right_disp_sub_pix,
+            float* d_left_disp, float* d_right_disp,
             int width, int height, int disp_size) {
 			if (disp_size == 64) {
 				dim3 blocks(width / WTA_PIXEL_IN_BLOCK, height);
@@ -307,8 +303,7 @@ namespace sgm {
 			else if (disp_size == 128) {
 				dim3 blocks(width / WTA_PIXEL_IN_BLOCK, height);
 				dim3 threads(32, WTA_PIXEL_IN_BLOCK);
-				winner_takes_all_kernel128 << < blocks, threads >> > (d_left_disp, d_right_disp, d_scost, 
-                    d_left_disp_sub_pix, d_right_disp_sub_pix,
+				winner_takes_all_kernel128 << < blocks, threads >> > (d_left_disp, d_right_disp, d_scost,
                     width, height);
 			}
 		}

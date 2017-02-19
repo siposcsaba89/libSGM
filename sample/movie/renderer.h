@@ -35,9 +35,9 @@ public:
 
 	void render_input(const uint8_t* h_input_ptr);
 
-	void render_disparity(const uint16_t* d_disp, int disp_size);
+	void render_disparity(const float* d_disp, float disp_size);
 
-	void render_disparity_color(const uint16_t* d_disp, int disp_size);
+	void render_disparity_color(const float* d_disp, float disp_size);
 
 private:
 	Renderer(const Renderer&);

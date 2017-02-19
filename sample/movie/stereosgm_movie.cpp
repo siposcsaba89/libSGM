@@ -32,6 +32,56 @@ limitations under the License.
 //e:\Downloads\cones\im2.png e:\Downloads\cones\im6.png
 //e:\Downloads\teddy\im2.png e:\Downloads\teddy\im6.png
 //e:\Downloads\data_scene_flow\image_2\000000_10.png e:\Downloads\data_scene_flow\image_3\000000_10.png
+//d:\tmp\video1156956.mp4 d:\tmp\video2156956.mp4
+
+
+//template<typename T>
+//void writeFalseColors(const cv::Mat & disp, cv::Mat & dispColor, float max_val,
+//    int32_t width_, int32_t height_) {
+//
+//    // color map
+//    float map[8][4] = { { 0,0,0,114 },{ 0,0,1,185 },{ 1,0,0,114 },{ 1,0,1,174 },
+//    { 0,1,0,114 },{ 0,1,1,185 },{ 1,1,0,114 },{ 1,1,1,0 } };
+//    float sum = 0;
+//    for (int32_t i = 0; i<8; i++)
+//        sum += map[i][3];
+//
+//    float weights[8]; // relative weights
+//    float cumsum[8];  // cumulative weights
+//    cumsum[0] = 0;
+//    for (int32_t i = 0; i<7; i++) {
+//        weights[i] = sum / map[i][3];
+//        cumsum[i + 1] = cumsum[i] + map[i][3] / sum;
+//    }
+//
+//    // for all pixels do
+//    for (int32_t v = 0; v<height_; v++) {
+//        for (int32_t u = 0; u<width_; u++) {
+//
+//            // get normalized value
+//            float val = std::min(std::max(disp.at<T>(v, u) / max_val, 0.0f), 1.0f);
+//
+//            // find bin
+//            int32_t i;
+//            for (i = 0; i<7; i++)
+//                if (val<cumsum[i + 1])
+//                    break;
+//
+//            // compute red/green/blue values
+//            float   w = 1.0 - (val - cumsum[i])*weights[i];
+//            uint8_t r = (uint8_t)((w*map[i][0] + (1.0 - w)*map[i + 1][0]) * 255.0);
+//            uint8_t g = (uint8_t)((w*map[i][1] + (1.0 - w)*map[i + 1][1]) * 255.0);
+//            uint8_t b = (uint8_t)((w*map[i][2] + (1.0 - w)*map[i + 1][2]) * 255.0);
+//
+//            // set pixel
+//            dispColor.at<cv::Vec3b>(v, u) = cv::Vec3b(b, g, r);
+//        }
+//    }
+//
+//}
+
+
+
 int main(int argc, char* argv[]) {
 
 	if (argc < 3) {
@@ -98,11 +148,11 @@ int main(int argc, char* argv[]) {
 		std::exit(EXIT_FAILURE);
 	}
 
-	sgm::StereoSGM ssgm(width, height, disp_size, bits, 16, sgm::EXECUTE_INOUT_HOST2CUDA);
+	sgm::StereoSGM ssgm(width, height, disp_size, bits, 32, sgm::EXECUTE_INOUT_HOST2CUDA);
 
 	Renderer renderer(width, height);
 	
-	uint16_t* d_output_buffer = NULL;
+	float* d_output_buffer = NULL;
 
 	int frame_no = 0;
 	while (!demo.should_close() && true) {
@@ -111,32 +161,34 @@ int main(int argc, char* argv[]) {
         cv::cvtColor(rightc, right, CV_BGR2GRAY);
 
 		ssgm.execute(left.data, right.data, (void**)&d_output_buffer); // , sgm::DST_TYPE_CUDA_PTR, 16);
-      
+        static cv::Mat left_disp_subpx(height, width, CV_32FC1);
+        //static cv::Mat left_disp_subpix_color(height, width, CV_8UC3);
+        cudaMemcpy(left_disp_subpx.data, d_output_buffer, sizeof(float) * width * height, cudaMemcpyDeviceToHost);
+
+        //writeFalseColors<float>(left_disp_subpx, left_disp_subpix_color, 128.0f, width, height);
        
-        renderer.render_input((uint8_t*)leftc.data);
+        if (demo.get_flag() == 0)
+        {
+            renderer.render_input((uint8_t*)leftc.data);
+        }
+        else if (demo.get_flag() == 1)
+        {
+            renderer.render_disparity_color((float*)left_disp_subpx.data, 128.0f);
+        }
+        else
+        {
+            renderer.render_disparity((float*)left_disp_subpx.data, 128.0f);;
+        }
+
         //renderer.render_disparity(nullptr, 128);
         demo.swap_buffer();
-        //cv::imshow("left color image", leftc);
+        //cv::imshow("colored disparity", left_disp_subpix_color);
         //cv::imshow("left gray image", left);
-        int key = cv::waitKey(0);
-        if (key == 27)
-          break;
+        //int key = cv::waitKey(1);
+        //if (key == 27)
+          //break;
         frame_no++;
-        //if (!(cap0.read(leftc) && cap1.read(rightc)))
-            //break;
-
-        //if (leftc.cols % 2 != 0)
-        //{
-        //    leftc = leftc(cv::Rect(0, 0, leftc.cols - 1, leftc.rows));
-        //    rightc = rightc(cv::Rect(0, 0, rightc.cols - 1, rightc.rows));
-        //}
-
-        //if (leftc.rows % 2 != 0)
-        //{
-        //    leftc = leftc(cv::Rect(0, 0, leftc.cols, leftc.rows - 1));
-        //    rightc = rightc(cv::Rect(0, 0, rightc.cols, rightc.rows - 1));
-        //}
-
-
+        if (!(cap0.read(leftc) && cap1.read(rightc)))
+            break;
 	}
 }
