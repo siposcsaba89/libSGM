@@ -114,11 +114,15 @@ int main(int argc, char* argv[]) {
     //    leftc = leftc(cv::Rect(0, 0, leftc.cols, leftc.rows - 1));
     //    rightc = rightc(cv::Rect(0, 0, rightc.cols, rightc.rows - 1));
     //}
+    cv::Mat half_left, half_right;
+    double scale = 0.25;
+    cv::resize(leftc, half_left, cv::Size(), scale, scale, cv::INTER_LINEAR);
+    cv::resize(rightc, half_right, cv::Size(), scale, scale, cv::INTER_LINEAR);
 
-    cv::cvtColor(leftc, left, CV_BGR2GRAY);
-    cv::cvtColor(rightc, right, CV_BGR2GRAY);
+    cv::cvtColor(half_left, left, CV_BGR2GRAY);
+    cv::cvtColor(half_right, right, CV_BGR2GRAY);
 
-	int disp_size = 128;
+	int disp_size = 64;
 
 
 	if (left.size() != right.size() || left.type() != right.type()) {
@@ -157,8 +161,10 @@ int main(int argc, char* argv[]) {
 	int frame_no = 0;
 	while (!demo.should_close() && true) {
 
-        cv::cvtColor(leftc, left, CV_BGR2GRAY);
-        cv::cvtColor(rightc, right, CV_BGR2GRAY);
+        cv::resize(leftc, half_left, cv::Size(), scale, scale, cv::INTER_LINEAR);
+        cv::resize(rightc, half_right, cv::Size(), scale, scale, cv::INTER_LINEAR);
+        cv::cvtColor(half_left, left, CV_BGR2GRAY);
+        cv::cvtColor(half_right, right, CV_BGR2GRAY);
 
 		ssgm.execute(left.data, right.data, (void**)&d_output_buffer); // , sgm::DST_TYPE_CUDA_PTR, 16);
         static cv::Mat left_disp_subpx(height, width, CV_32FC1);
@@ -169,15 +175,15 @@ int main(int argc, char* argv[]) {
        
         if (demo.get_flag() == 0)
         {
-            renderer.render_input((uint8_t*)leftc.data);
+            renderer.render_input((uint8_t*)half_left.data);
         }
         else if (demo.get_flag() == 1)
         {
-            renderer.render_disparity_color((float*)left_disp_subpx.data, 128.0f);
+            renderer.render_disparity_color((float*)left_disp_subpx.data, disp_size);
         }
         else
         {
-            renderer.render_disparity((float*)left_disp_subpx.data, 128.0f);;
+            renderer.render_disparity((float*)left_disp_subpx.data, disp_size);
         }
 
         //renderer.render_disparity(nullptr, 128);

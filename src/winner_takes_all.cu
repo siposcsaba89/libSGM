@@ -111,10 +111,68 @@ namespace {
 		///////////////////////////////////////////////////////////////////////////////////
 
 		if (idx == 0) {
-			float lhv = minCostL2 * uniqueness;
-			leftDisp[y * width + x] = (lhv < minCostL1 && abs(minDispL1 - minDispL2) > 1) ? 0 : minDispL1 + 1; // add "+1" 
-			float rhv = minCostR2 * uniqueness;
-			rightDisp[y * width + x] = (rhv < minCostR1 && abs(minDispR1 - minDispR2) > 1) ? 0 : minDispR1 + 1; // add "+1" 
+			//float lhv = minCostL2 * uniqueness;
+			//leftDisp[y * width + x] = (lhv < minCostL1 && abs(minDispL1 - minDispL2) > 1) ? 0 : minDispL1 + 1; // add "+1" 
+			//float rhv = minCostR2 * uniqueness;
+			//rightDisp[y * width + x] = (rhv < minCostR1 && abs(minDispR1 - minDispR2) > 1) ? 0 : minDispR1 + 1; // add "+1" 
+
+
+            float lhv = minCostL2 * uniqueness;
+            int disp = (lhv < minCostL1 && abs(minDispL1 - minDispL2) > 1) ? 0 : minDispL1; // add "+1" 
+            float sub_pix_disp = disp;
+            if (disp > 1 && disp < DISP_SIZE - 1)
+            {
+                float leftDif = current_cost[disp - 1] - minCostL1;
+                float rightDif = current_cost[disp + 1] - minCostL1;
+
+                if (leftDif <= rightDif)
+                {
+                    float xx = leftDif / rightDif;
+                    //sub_pix_disp = sub_pix_disp - 0.5f + xx / 2.0f - 1.0f; //linear method
+                    //sub_pix_disp = sub_pix_disp - 0.5f + xx / (xx + 1.0f) - 1.0f; //parabola
+                    sub_pix_disp = sub_pix_disp - 0.5f + (xx * xx + xx) / (4.0f); //histogram
+                                                                                  //sub_pix_disp = sub_pix_disp - 0.5f + (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
+                }
+                else
+                {
+                    float xx = rightDif / leftDif;
+                    //sub_pix_disp = sub_pix_disp + 0.5f - xx / 2.0f - 1.0f;//linear
+                    //sub_pix_disp = sub_pix_disp + 0.5f - xx / (xx + 1.0f) - 1.0f; //parabola
+                    sub_pix_disp = sub_pix_disp + 0.5f - (xx * xx + xx) / (4.0f); //histogram
+                                                                                  //sub_pix_disp = sub_pix_disp + 0.5f - (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
+                }
+            }
+            leftDisp[y * width + x] = sub_pix_disp;
+
+            //right disparity
+            float rhv = minCostR2 * uniqueness;
+            disp = (rhv < minCostR1 && abs(minDispR1 - minDispR2) > 1) ? 0 : minDispR1; // add "+1" 
+            sub_pix_disp = disp;
+            if (disp > 1 && disp < DISP_SIZE - 1)
+            {
+                float leftDif = tmp_costs[disp - 1] - minCostR1;
+                float rightDif = tmp_costs[disp + 1] - minCostR1;
+                if (leftDif <= rightDif)
+                {
+                    float xx = leftDif / rightDif;
+                    //sub_pix_disp = sub_pix_disp - 0.5f + xx / 2.0f - 1.0f; //linear method
+                    //sub_pix_disp = sub_pix_disp - 0.5f + xx / (xx + 1.0f) - 1.0f; //parabola
+                    sub_pix_disp = sub_pix_disp - 0.5f + (xx * xx + xx) / (4.0f); //histogram
+                                                                                  //sub_pix_disp = sub_pix_disp - 0.5f + (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
+                }
+                else
+                {
+                    float xx = rightDif / leftDif;
+                    //sub_pix_disp = sub_pix_disp + 0.5f - xx / 2.0f - 1.0f;//linear
+                    //sub_pix_disp = sub_pix_disp + 0.5f - xx / (xx + 1.0f) - 1.0f; //parabola
+                    sub_pix_disp = sub_pix_disp + 0.5f - (xx * xx + xx) / (4.0f); //histogram
+                                                                                  //sub_pix_disp = sub_pix_disp + 0.5f - (0.5f - 0.5f*cosf(xx * 1.5707963f)) - 1.0f; //fitting
+                }
+            }
+
+            rightDisp[y * width + x] = sub_pix_disp;
+
+
 		}
 	}
 
