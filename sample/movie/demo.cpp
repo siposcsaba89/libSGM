@@ -29,13 +29,30 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 			self->flag_ = 0;
 		}
 	}
+    else if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+    {
+        SGMDemo* self = (SGMDemo*)glfwGetWindowUserPointer(window);
+        self->is_paused = !self->is_paused;
+
+    }
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+    {
+        SGMDemo* self = (SGMDemo*)glfwGetWindowUserPointer(window);
+        self->calc_dist = true;
+        glfwGetCursorPos(window, &self->mouse_x, &self->mouse_y);
+    }
 }
 
 SGMDemo::SGMDemo(int width, int height) : flag_(0), width_(width), height_(height) {
 
 }
 
-SGMDemo::~SGMDemo() {
+SGMDemo::~SGMDemo() 
+{
 }
 
 int SGMDemo::init() {
@@ -60,7 +77,7 @@ int SGMDemo::init() {
 	// setup event handler
 	glfwSetWindowUserPointer(this->window_, this);
 	glfwSetKeyCallback(this->window_, key_callback);
-
+    glfwSetMouseButtonCallback(this->window_, mouse_button_callback);
 	return 0;
 }
 

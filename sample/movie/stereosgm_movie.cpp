@@ -25,6 +25,8 @@ limitations under the License.
 
 #include "demo.h"
 #include "renderer.h"
+#include <adasworks/io/imagestream.h>
+#include <thread>
 
 //e:\Downloads\venus\im2.ppm e:\Downloads\venus\im6.ppm
 //e:\Downloads\barn1\im2.ppm e:\Downloads\barn1\im6.ppm
@@ -80,7 +82,55 @@ limitations under the License.
 //
 //}
 
+#include <opencv2/opencv.hpp>
 
+struct RectData
+{
+    cv::Mat rmap[2][2], R, T, P1, P2;
+
+};
+
+void initRectification(const std::string & intrinsic_filename, 
+    const std::string & extrinsics_filename,
+    int img_w, int img_h, RectData & r)
+{
+    // reading intrinsic parameters
+    //std::string  = "./data/intrinsics.yml";
+    cv::FileStorage fs_intrinsic(intrinsic_filename, cv::FileStorage::READ);
+    if (!fs_intrinsic.isOpened()) {
+        printf("Failed to open file %s", intrinsic_filename.c_str());
+        exit(1);
+    }
+    cv::Mat M1, D1, M2, D2;
+    fs_intrinsic["M1"] >> M1;
+    fs_intrinsic["D1"] >> D1;
+    fs_intrinsic["M2"] >> M2;
+    fs_intrinsic["D2"] >> D2;
+
+    // reading extrinsics parameters
+    //std::string extrinsics_filename = "./data/extrinsics.yml";
+    cv::FileStorage fs_extrinsics(extrinsics_filename, cv::FileStorage::READ);
+    if (!fs_extrinsics.isOpened()) {
+        printf("Failed to open file %s", extrinsics_filename.c_str());
+        exit(1);
+    }
+    cv::Mat T, R, R1, R2, P1, P2, Q;
+    
+    fs_extrinsics["R"] >> R;
+    fs_extrinsics["T"] >> T;
+    cv::Size img_size = cv::Size(img_w, img_h);
+    cv::Rect roi1, roi2;
+    cv::stereoRectify(M1, D1, M2, D2, img_size, R, T, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, 0, img_size, &roi1, &roi2);
+    //Precompute maps for cv::remap()
+    cv::initUndistortRectifyMap(M1, D1, R1, P1, img_size, CV_16SC2, r.rmap[0][0], r.rmap[0][1]);
+    cv::initUndistortRectifyMap(M2, D2, R2, P2, img_size, CV_16SC2, r.rmap[1][0], r.rmap[1][1]);//LOG_INFO("P1, P2, Q sizes: %dx%d, %dx%d, %dx%d", P1.cols, P1.rows, P2.cols, P2.rows, Q.cols, Q.rows);
+    r.P1 = P1;
+    r.P2 = P2;
+    r.T = T;
+    r.R = R;
+}
+
+#include <adasworks/io/imagestreamfactory.h>
 
 int main(int argc, char* argv[]) {
 
@@ -92,16 +142,48 @@ int main(int argc, char* argv[]) {
 	left_filename_fmt = argv[1];
 	right_filename_fmt = argv[2];
 
-    cv::VideoCapture cap0(left_filename_fmt);
-    cv::VideoCapture cap1(right_filename_fmt);
+
+    std::string uri = argv[1];
+    adasworks::io::ImageStreamFactory factory;
+    std::unique_ptr<adasworks::io::ImageStream> stream0(factory.create(uri));
+    CHECK(stream0, "Failed to create stream for: %s", uri.c_str());
+    uri = argv[2];
+    std::unique_ptr<adasworks::io::ImageStream> stream1(factory.create(uri));
+    CHECK(stream1, "Failed to create stream for: %s", uri.c_str());
+
+    std::vector<adasworks::io::ImageHandlePtr> imgs0;
+    std::vector<adasworks::io::ImageHandlePtr> imgs1;
+    adasworks::io::ImageStream::Status status;
+
+    status = stream0->read(imgs0, 100);
+    status = stream1->read(imgs1, 100);
+    adasworks::io::ImageBuffer buf0 = imgs0[0]->lock();
+    adasworks::io::ImageBuffer buf1 = imgs1[0]->lock();
+    int imgw = buf0.width();
+    int imgh = buf0.height();
+
+
+    RectData rd;
+    initRectification(argv[3], argv[4], imgw, imgh, rd);
+
+    //cv::VideoCapture cap0(left_filename_fmt);
+    //cv::VideoCapture cap1(right_filename_fmt);
 
 	// dangerous
-    cv::Mat leftc, rightc;
-    cv::Mat left;
-    cv::Mat right;
+    cv::Mat leftc, rightc, leftc_full_r, rightc_full_r;
+    cv::Mat left(imgh, imgw, CV_8UC1);
+    cv::Mat right(imgh, imgw, CV_8UC1);;
+    memcpy(left.data, buf0.data(), imgh * imgw);
+    memcpy(right.data, buf1.data(), imgh * imgw);
+    cv::Mat left_gray, right_gray, leftc_full, rightc_full;
+    cv::cvtColor(left, leftc_full, CV_BayerRG2BGR);
+    cv::cvtColor(right, rightc_full, CV_BayerRG2BGR);
+    cv::remap(leftc_full, leftc_full_r, rd.rmap[0][0], rd.rmap[0][1], cv::INTER_LINEAR);
+    cv::remap(rightc_full, rightc_full_r, rd.rmap[1][0], rd.rmap[1][1], cv::INTER_LINEAR);
 
-    cap0 >> leftc;
-    cap1 >> rightc;
+
+    //cap0 >> leftc;
+    //cap1 >> rightc;
 
     //if (leftc.cols % 2 != 0)
     //{
@@ -115,14 +197,14 @@ int main(int argc, char* argv[]) {
     //    rightc = rightc(cv::Rect(0, 0, rightc.cols, rightc.rows - 1));
     //}
     cv::Mat half_left, half_right;
-    double scale = 0.25;
-    cv::resize(leftc, half_left, cv::Size(), scale, scale, cv::INTER_LINEAR);
-    cv::resize(rightc, half_right, cv::Size(), scale, scale, cv::INTER_LINEAR);
+    double scale = 1.0;
+    cv::resize(leftc_full, half_left, cv::Size(), scale, scale, cv::INTER_LINEAR);
+    cv::resize(rightc_full, half_right, cv::Size(), scale, scale, cv::INTER_LINEAR);
 
-    cv::cvtColor(half_left, left, CV_BGR2GRAY);
-    cv::cvtColor(half_right, right, CV_BGR2GRAY);
+    cv::cvtColor(half_left, left_gray, CV_BGR2GRAY);
+    cv::cvtColor(half_right, right_gray, CV_BGR2GRAY);
 
-	int disp_size = 64;
+	int disp_size = 128;
 
 
 	if (left.size() != right.size() || left.type() != right.type()) {
@@ -140,8 +222,8 @@ int main(int argc, char* argv[]) {
 		std::exit(EXIT_FAILURE);
 	}
 
-	int width = left.cols;
-	int height = left.rows;
+	int width = half_left.cols;
+	int height = half_left.rows;
 
 	//cudaGLSetGLDevice(0);
 
@@ -161,16 +243,20 @@ int main(int argc, char* argv[]) {
 	int frame_no = 0;
 	while (!demo.should_close() && true) {
 
-        cv::resize(leftc, half_left, cv::Size(), scale, scale, cv::INTER_LINEAR);
-        cv::resize(rightc, half_right, cv::Size(), scale, scale, cv::INTER_LINEAR);
-        cv::cvtColor(half_left, left, CV_BGR2GRAY);
-        cv::cvtColor(half_right, right, CV_BGR2GRAY);
-
-		ssgm.execute(left.data, right.data, (void**)&d_output_buffer); // , sgm::DST_TYPE_CUDA_PTR, 16);
         static cv::Mat left_disp_subpx(height, width, CV_32FC1);
-        //static cv::Mat left_disp_subpix_color(height, width, CV_8UC3);
-        cudaMemcpy(left_disp_subpx.data, d_output_buffer, sizeof(float) * width * height, cudaMemcpyDeviceToHost);
 
+        if (!demo.isPaused())
+        {
+            cv::resize(leftc_full_r, half_left, cv::Size(), scale, scale, cv::INTER_LINEAR);
+            cv::resize(rightc_full_r, half_right, cv::Size(), scale, scale, cv::INTER_LINEAR);
+            cv::cvtColor(half_left, left_gray, CV_BGR2GRAY);
+            cv::cvtColor(half_right, right_gray, CV_BGR2GRAY);
+
+            ssgm.execute(left_gray.data, right_gray.data, (void**)&d_output_buffer); // , sgm::DST_TYPE_CUDA_PTR, 16);
+
+        //static cv::Mat left_disp_subpix_color(height, width, CV_8UC3);
+            cudaMemcpy(left_disp_subpx.data, d_output_buffer, sizeof(float) * width * height, cudaMemcpyDeviceToHost);
+        }
         //writeFalseColors<float>(left_disp_subpx, left_disp_subpix_color, 128.0f, width, height);
        
         if (demo.get_flag() == 0)
@@ -186,6 +272,45 @@ int main(int argc, char* argv[]) {
             renderer.render_disparity((float*)left_disp_subpx.data, disp_size);
         }
 
+
+        if (demo.get_calc_dist())
+        {
+            demo.set_calc_dist(false);
+
+            double x_pos = demo.getXpos();
+            double y_pos = demo.getYpos();
+
+            int hws = 5;
+            int from_w = std::max(0, (int)x_pos - hws);
+            int to_w = std::min(width, (int)x_pos + hws);
+            int from_h = std::max(0, (int)y_pos - hws);
+            int to_h = std::min(height, (int)y_pos + hws);
+
+            float avg_disp = 0.0f;
+            int cont = 0;
+            for (int j = from_h; j < to_h; ++j)
+            {
+                for (int i = from_w; i < to_w; ++i)
+                {
+                    float disp = left_disp_subpx.at<float>(j, i);
+                    
+                    if (disp > 0.5f)
+                    {
+                        avg_disp += disp;
+                        ++cont;
+                    }
+                }
+            }
+            avg_disp /= cont;
+            double b = cv::norm(rd.T);
+            double z = rd.P1.at<double>(0) * b / avg_disp;
+            double x = (x_pos - rd.P1.at<double>(0, 2)) * z / rd.P1.at<double>(0, 0);
+            double y = (y_pos - rd.P1.at<double>(1, 2)) * z / rd.P1.at<double>(1, 1);
+            
+            std::cout << x << "  " << y << "   " << z << " norm: " << sqrt(x*x + y*y + z*z) << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
         //renderer.render_disparity(nullptr, 128);
         demo.swap_buffer();
         //cv::imshow("colored disparity", left_disp_subpix_color);
@@ -193,8 +318,21 @@ int main(int argc, char* argv[]) {
         //int key = cv::waitKey(1);
         //if (key == 27)
           //break;
-        frame_no++;
-        if (!(cap0.read(leftc) && cap1.read(rightc)))
-            break;
-	}
+        if (!demo.isPaused())
+        {
+            status = stream0->read(imgs0, 100);
+            status = stream1->read(imgs1, 100);
+            adasworks::io::ImageBuffer buf0 = imgs0[0]->lock();
+            adasworks::io::ImageBuffer buf1 = imgs1[0]->lock();
+
+            frame_no++;
+            memcpy(left.data, buf0.data(), imgh * imgw);
+            memcpy(right.data, buf1.data(), imgh * imgw);
+            cv::cvtColor(left, leftc_full, CV_BayerBG2BGR);
+            cv::cvtColor(right, rightc_full, CV_BayerBG2BGR);
+            cv::remap(leftc_full, leftc_full_r, rd.rmap[0][0], rd.rmap[0][1], cv::INTER_LINEAR);
+            cv::remap(rightc_full, rightc_full_r, rd.rmap[1][0], rd.rmap[1][1], cv::INTER_LINEAR);
+        }
+
+    }
 }

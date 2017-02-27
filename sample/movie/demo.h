@@ -33,11 +33,20 @@ public:
 	uint32_t get_flag() const { return flag_; }
 
 	void close();
+
+    bool get_calc_dist() { return calc_dist; }
+    void set_calc_dist(bool b) { calc_dist = b; }
+    double getXpos() { return mouse_x; }
+    double getYpos() { return mouse_y; }
+    bool isPaused() { return is_paused; }
 private:
 	int width_;
 	int height_;
 	GLFWwindow* window_;
 	uint32_t flag_;
-
-	friend void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    double mouse_x = 0, mouse_y = 0;
+    bool calc_dist = false;
+    bool is_paused = false;
+    friend void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    friend void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 };
